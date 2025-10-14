@@ -113,7 +113,7 @@ export default {
 					body: "@natsumiworld",
 					renderLargerThumbnail: true,
 					sourceUrl:
-						"https://whatsapp.com/channel/0029Va8b0s8G3R3jDBfpja0a",
+						"https://whatsapp.com/channel/0029Vb6gtmX3QxRyqddFnj04",
 					mediaType: 1,
 					thumbnailUrl,
 				},

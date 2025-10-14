@@ -39,19 +39,22 @@ export default {
 			return m.reply("Please provide the text.");
 		}
 
-		const apiUrl = animated
-			? `https://brat.caliphdev.com/api/brat/animate?text=${text}`
-			: `https://brat.caliphdev.com/api/brat?text=${text}`;
-
-		const response = await fetch(apiUrl);
-		if (!response.ok) {
-			throw new Error("Failed.");
-		}
-		const arrayBuffer = await response.arrayBuffer();
-		const mediaBuffer = Buffer.from(arrayBuffer);
+        const apiUrl = animated
+          ? `https://inusoft-brat.hf.space/api/bratvid?text=${encodeURIComponent(text)}`
+          : `https://inusoft-brat.hf.space/api/brat?text=${encodeURIComponent(text)}`;
+        
+        const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error("Failed.");
+        
+        const result = await response.json();
+        
+        if (!result.URL) throw new Error("URL not found in API result.");
+        
+        const file = await fetch(result.URL);
+        const mediaBuffer = Buffer.from(await file.arrayBuffer());
 
 		const sticker = await Sticker.create(mediaBuffer, {
-			packname: "@natsumiworld.",
+			packname: "@inusoft.",
 			author: m.pushName,
 			emojis: "🤣",
 		});
