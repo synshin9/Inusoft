@@ -31,30 +31,26 @@ export default {
 		}
 
 		const animated = /\s-animated\s*$/i.test(input);
-		const text = animated
-			? input.replace(/\s-animated\s*$/i, "").trim()
-			: input.trim();
-
+		const text = input.replace(/\s-animated\s*$/i, "").trim();
 		if (!text) {
 			return m.reply("Please provide the text.");
 		}
 
-        const apiUrl = animated
-          ? `https://inusoft-brat.hf.space/api/bratvid?text=${encodeURIComponent(text)}`
-          : `https://inusoft-brat.hf.space/api/brat?text=${encodeURIComponent(text)}`;
-        
-        const response = await fetch(apiUrl);
-        if (!response.ok) throw new Error("Failed.");
-        
-        const result = await response.json();
-        
-        if (!result.URL) throw new Error("URL not found in API result.");
-        
-        const file = await fetch(result.URL);
-        const mediaBuffer = Buffer.from(await file.arrayBuffer());
+		const baseUrl = "https://inusoft-brat.hf.space/api/";
+		const url = `${baseUrl}${animated ? "bratvid" : "brat"}?text=${encodeURIComponent(text)}`;
 
-		const sticker = await Sticker.create(mediaBuffer, {
-			packname: "@inusoft.",
+		const res = await fetch(url);
+		if (!res.ok) {
+			throw new Error("Failed to fetch.");
+		}
+
+		const { URL } = await res.json();
+		const buffer = Buffer.from(
+			await (await fetch(URL.trim())).arrayBuffer()
+		);
+
+		const sticker = await Sticker.create(buffer, {
+			packname: "@natsumiworld.",
 			author: m.pushName,
 			emojis: "🤣",
 		});

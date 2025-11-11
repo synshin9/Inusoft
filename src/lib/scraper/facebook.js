@@ -124,48 +124,4 @@ export default async function fesnuk(post, cookie, useragent) {
 		hd: hdMatch?.[1] ? parseString(hdMatch[1]) : null,
 		thumbnail: thumb ? parseString(thumb) : null,
 	};
-}/"preferred_thumbnail":{"image":{"uri":"(.*?)"/
-				);
-
-				const durationMatch = data.match(
-					/"playable_duration_in_ms":[0-9]+/
-				);
-
-				let type = "none";
-
-				if (imagePost) {
-					type = "image";
-				} else if (sdMatch && sdMatch[1]) {
-					type = "video";
-				}
-
-				const result = {
-					type,
-					url: post,
-					image: imageUrl || null,
-					externalUrl: externalUrl || null,
-					comments: comments || [],
-					title:
-						titleMatch && titleMatch[1]
-							? parseString(titleMatch[1])
-							: (data.match(/<title>(.*?)<\/title>/)?.[1] ?? ""),
-					duration_ms: durationMatch
-						? Number(durationMatch[0].split(":")[1])
-						: null,
-					sd: sdMatch && sdMatch[1] ? parseString(sdMatch[1]) : null,
-					hd: hdMatch && hdMatch[1] ? parseString(hdMatch[1]) : null,
-					thumbnail:
-						thumbMatch && thumbMatch[1]
-							? parseString(thumbMatch[1])
-							: null,
-				};
-				resolve(result);
-			})
-			.catch((err) => {
-				console.error("Error fetching media information:", err);
-				reject(
-					"Unable to fetch media information at this time. Please try again."
-				);
-			});
-	});
 }

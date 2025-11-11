@@ -1004,14 +1004,4 @@ export default async function serialize(sock, msg, store) {
 			[])[0] || "";
 
 	return m;
-}adMedia(m);
-
-	m.isUrl =
-		((m.text &&
-			m.text.match(
-				/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi
-			)) ||
-			[])[0] || "";
-
-	return m;
 }
