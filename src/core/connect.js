@@ -1,6 +1,6 @@
-import { BOT_CONFIG, MYSQL_CONFIG } from "#config/index";
+import { BOT_CONFIG } from "#config/index";
 import Message from "#core/message";
-import { useMongoDbAuthState } from "#lib/auth/mongodb";
+import getAuthState from "#lib/auth/state";
 import logger from "#lib/logger";
 import PluginManager from "#lib/plugins";
 import print from "#lib/print";
@@ -15,55 +15,10 @@ import {
 	jidNormalizedUser,
 	makeCacheableSignalKeyStore,
 	makeWASocket,
-	useMultiFileAuthState,
 } from "baileys";
-import { useMySQLAuthState } from "mysql-baileys";
-import { readdir, unlink } from "node:fs/promises";
-import { join } from "node:path";
 import qrcode from "qrcode";
 
 const msgRetryCounterCache = new NodeCache();
-/**
- * Handle authentication state for different backends (MongoDB, MySQL, Local File)
- * @param {string} sessionName
- * @returns {Promise<{state, saveCreds, removeCreds}>}
- */
-async function getAuthState(sessionName) {
-	let state, saveCreds, removeCreds;
-	if (
-		process.env.AUTH_STORE === "mongodb" ||
-		process.env.USE_MONGO_AUTH === "true"
-	) {
-		const mongoUrl = process.env.MONGO_URI;
-		({ state, saveCreds, removeCreds } = await useMongoDbAuthState(
-			mongoUrl,
-			{ session: sessionName }
-		));
-		print.info("Auth store: MongoDB");
-	} else if (process.env.AUTH_STORE === "mysql") {
-		({ state, saveCreds, removeCreds } = await useMySQLAuthState({
-			...MYSQL_CONFIG,
-			session: sessionName,
-		}));
-		print.info("Auth store: MySQL");
-	} else {
-		const authPath = process.env.LOCAL_AUTH_PATH || "auth_info_baileys";
-		({ state, saveCreds } = await useMultiFileAuthState(authPath));
-		removeCreds = async () => {
-			try {
-				const files = await readdir(authPath);
-				await Promise.all(
-					files.map((file) => unlink(join(authPath, file)))
-				);
-				print.info(`All auth files removed from: ${authPath}`);
-			} catch (e) {
-				print.error("Failed to remove local auth files:", e);
-			}
-		};
-		print.info(`Auth store: Local File (${authPath})`);
-	}
-	return { state, saveCreds, removeCreds };
-}
 
 /**
  * Main class to manage the WhatsApp bot connection and events.
@@ -280,11 +235,72 @@ class Connect {
 		this.sock.ev.on(
 			"group-participants.update",
 			async ({ id, participants, action }) => {
+				const participantJids = participants
+					.map((p) => (typeof p === "string" ? p : p?.id))
+					.filter(Boolean)
+					.map(jidNormalizedUser);
+
 				print.info(
-					`Group participants updated for ${id}: ${action} ${participants.join(", ")}`
+					`Group participants updated for ${id}: ${action} ${participantJids.join(", ")}`
 				);
 
 				const normalizedJid = jidNormalizedUser(id);
+				let metadata =
+					this.groupMetadataCache.get(normalizedJid) ||
+					this.store.getGroupMetadata(normalizedJid);
+
+				if (!metadata) {
+					try {
+						metadata = await this.sock.groupMetadata(id);
+					} catch (e) {
+						print.error(`Failed to fetch metadata for ${id}:`, e);
+						return;
+					}
+				}
+
+				switch (action) {
+					case "add":
+						participantJids.forEach((pid) => {
+							if (
+								!metadata.participants.some((p) => p.id === pid)
+							) {
+								metadata.participants.push({
+									id: pid,
+									admin: null,
+								});
+							}
+						});
+						break;
+					case "promote":
+						metadata.participants.forEach((p) => {
+							if (participantJids.includes(p.id)) {
+								p.admin = "admin";
+							}
+						});
+						break;
+					case "demote":
+						metadata.participants.forEach((p) => {
+							if (participantJids.includes(p.id)) {
+								p.admin = null;
+							}
+						});
+						break;
+					case "remove":
+						metadata.participants = metadata.participants.filter(
+							(p) => !participantJids.includes(p.id)
+						);
+						break;
+				}
+
+				this.groupMetadataCache.set(normalizedJid, metadata);
+				this.store.setGroupMetadata(normalizedJid, metadata);
+				print.debug(`Updated group metadata cache for ${id}`);
+			}
+		);
+	}
+}
+
+export default Connect;nst normalizedJid = jidNormalizedUser(id);
 				let metadata =
 					this.groupMetadataCache.get(normalizedJid) ||
 					this.store.getGroupMetadata(normalizedJid);

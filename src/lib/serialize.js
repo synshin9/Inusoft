@@ -1,6 +1,5 @@
 import { BOT_CONFIG } from "#config/index";
 import * as Func from "#lib/functions";
-import { mimeMap } from "#lib/media";
 import { getPrefix } from "#lib/prefix";
 import Sticker from "#lib/sticker";
 import { to_audio } from "#utils/converter";
@@ -9,7 +8,6 @@ import {
 	WAProto,
 	areJidsSameUser,
 	chatModificationToAppPatch,
-	downloadContentFromMessage,
 	downloadMediaMessage,
 	extractMessageContent,
 	generateForwardMessageContent,
@@ -102,13 +100,14 @@ export function buildLidMap(participants = []) {
  */
 export function resolveLidToJid(jid, participants = [], lidMap = {}) {
 	if (!jid || typeof jid !== "string" || !jid.endsWith("@lid")) {
-		return jid;
+		return jidNormalizedUser(jid);
 	}
 	if (lidMap && lidMap[jid]) {
-		return lidMap[jid];
+		return jidNormalizedUser(lidMap[jid]);
 	}
 	const found = participants.find((p) => p.id === jid || p.lid === jid);
-	return found?.jid || found?.phoneNumber || found?.id || jid;
+	const resolved = found?.jid || found?.phoneNumber || found?.id || jid;
+	return jidNormalizedUser(resolved);
 }
 
 function safeParseMention(sock, text) {
@@ -587,9 +586,24 @@ export default async function serialize(sock, msg, store) {
 		if (!metadata) {
 			try {
 				metadata = await sock.groupMetadata(m.from);
+				if (metadata?.participants) {
+					metadata.participants = metadata.participants.map((p) => ({
+						...p,
+						jid: jidNormalizedUser(p.jid),
+						phoneNumber: jidNormalizedUser(p.phoneNumber),
+					}));
+				}
 				store.setGroupMetadata(m.from, metadata);
 			} catch {
 				metadata = null;
+			}
+		} else {
+			if (metadata.participants) {
+				metadata.participants = metadata.participants.map((p) => ({
+					...p,
+					jid: jidNormalizedUser(p.jid),
+					phoneNumber: jidNormalizedUser(p.phoneNumber),
+				}));
 			}
 		}
 		m.metadata = metadata || null;
@@ -696,25 +710,6 @@ export default async function serialize(sock, msg, store) {
 			m.msg?.name ||
 			"";
 
-		// m.prefix = new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi").test(
-		// 	m.body
-		// )
-		// 	? m.body.match(
-		// 			new RegExp("^[°•π÷×¶∆£¢€¥®™+✓=|/~!?@#%^&.©^]", "gi")
-		// 		)[0]
-		// 	: "";
-		// m.command =
-		// 	m.body &&
-		// 	m.body.trim().replace(m.prefix, "").trim().split(/ +/).shift();
-		// m.args =
-		// 	m.body
-		// 		.trim()
-		// 		.replace(new RegExp("^" + Func.escapeRegExp(m.prefix), "i"), "")
-		// 		.replace(m.command, "")
-		// 		.split(/ +/)
-		// 		.filter((a) => a) || [];
-		// m.text = m.args.join(" ").trim();
-		// m.isCommand = false;
 		Object.assign(m, getPrefix(m.body, m));
 
 		m.expiration = m.msg?.contextInfo?.expiration || 0;
@@ -868,7 +863,6 @@ export default async function serialize(sock, msg, store) {
 
 				m.quoted.download = async () =>
 					await sock.downloadMedia(m.quoted);
-					//downloadMedia(m.quoted.message, pathFile);
 
 				m.quoted.delete = () =>
 					sock.sendMessage(m.from, { delete: m.quoted.key });
@@ -1001,6 +995,16 @@ export default async function serialize(sock, msg, store) {
 	};
 
 	m.download = async () => await sock.downloadMedia(m);
+
+	m.isUrl =
+		((m.body &&
+			m.body.match(
+				/https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*)/gi
+			)) ||
+			[])[0] || "";
+
+	return m;
+}adMedia(m);
 
 	m.isUrl =
 		((m.text &&
